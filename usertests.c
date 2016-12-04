@@ -1550,13 +1550,39 @@ void
 validateint(int *p)
 {
   int res;
-  asm("mov %%esp, %%ebx\n\t"
+  /* 
+   * We have to include some tricks to make this compile with PIC on
+   * older compilers (like GCC 4.2 in OpenBSD).
+   * 
+   * Upstream bug report, which reports this as magically "Fixed":
+   * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47602
+   *
+   * Guide for the solution implemented here:
+   * https://jbernard.io/2010/07/02/clobber-registers.html
+   *
+   * Note that I changed the ":" style a bit to make it easier to
+   * implement the preprocessor stuff.
+   *
+   * Note that although this allows xv6 to compile on OpenBSD 6.0, it
+   * still doesn't boot in QEMU, at least in a Xen HVM domU.
+   */
+  asm(
+#if defined(__i386__)
+      "pushl %%ebx;\n\t"
+#endif
+      "mov %%esp, %%ebx\n\t"
       "mov %3, %%esp\n\t"
       "int %2\n\t"
-      "mov %%ebx, %%esp" :
-      "=a" (res) :
-      "a" (SYS_sleep), "n" (T_SYSCALL), "c" (p) :
-      "ebx");
+      "mov %%ebx, %%esp"
+#if defined(__i386__)
+      "popl %%ebx;\n\t"
+#endif
+      : "=a" (res)
+      : "a" (SYS_sleep), "n" (T_SYSCALL), "c" (p)
+#if !defined(__i386__)
+      : "ebx"
+#endif
+      );
 }
 
 void
